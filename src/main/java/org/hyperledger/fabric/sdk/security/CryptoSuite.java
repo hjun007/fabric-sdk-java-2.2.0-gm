@@ -114,6 +114,8 @@ public interface CryptoSuite {
      */
     Certificate bytesToCertificate(byte[] certBytes) throws CryptoException;
 
+    // modify by ringo
+    PrivateKey bytesToPrivateKey(byte[] pemKey) throws CryptoException;
     /**
      * The CryptoSuite factory. Currently {@link #getCryptoSuite} will always
      * give you a {@link CryptoPrimitives} object

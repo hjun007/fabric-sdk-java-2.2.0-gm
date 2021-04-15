@@ -41,13 +41,11 @@ public class HLSDKJCryptoSuiteFactory implements CryptoSuiteFactory {
     @Override
     public CryptoSuite getCryptoSuite(Properties properties) throws CryptoException, InvalidArgumentException {
 
+        // modify by ringo
         CryptoSuite ret = cache.get(properties);
         if (ret == null) {
             try {
-                CryptoPrimitives cp = new CryptoPrimitives();
-                cp.setProperties(properties);
-                cp.init();
-                ret = cp;
+                ret = new CryptoSM();
             } catch (Exception e) {
                 throw new CryptoException(e.getMessage(), e);
             }

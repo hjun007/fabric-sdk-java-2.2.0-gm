@@ -39,6 +39,7 @@ import org.hyperledger.fabric.sdk.exception.CryptoException;
 import org.hyperledger.fabric.sdk.exception.InvalidArgumentException;
 import org.hyperledger.fabric.sdk.identity.X509Enrollment;
 import org.hyperledger.fabric.sdk.security.CryptoPrimitives;
+import org.hyperledger.fabric.sdk.security.CryptoSM;
 import org.hyperledger.fabric.sdk.security.CryptoSuite;
 
 import static java.lang.String.format;
@@ -190,6 +191,14 @@ public final class ProtoUtils {
                 }
                 if (null != suite && suite instanceof CryptoPrimitives) {
                     CryptoPrimitives cp = (CryptoPrimitives) suite;
+                    byte[] der = cp.certificateToDER(cert);
+                    if (null != der && der.length > 0) {
+                        cert = toHexString(suite.hash(der));
+                    }
+                }
+                // modify by ringo
+                if (suite instanceof CryptoSM) {
+                    CryptoSM cp = (CryptoSM) suite;
                     byte[] der = cp.certificateToDER(cert);
                     if (null != der && der.length > 0) {
                         cert = toHexString(suite.hash(der));

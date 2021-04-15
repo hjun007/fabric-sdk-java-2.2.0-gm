@@ -109,4 +109,32 @@ class Util {
         return matches[0];
 
     }
+
+    public static File findFileSkForBJCA(File directory) {
+        File[] matches = directory.listFiles((dir, name) -> name.endsWith(".key.pem"));
+
+        if (null == matches) {
+            throw new RuntimeException(format("Matches returned null does %s directory exist?", directory.getAbsoluteFile().getName()));
+        }
+
+        if (matches.length != 1) {
+            throw new RuntimeException(format("Expected in %s only 1 sk file but found %d", directory.getAbsoluteFile().getName(), matches.length));
+        }
+
+        return matches[0];
+    }
+
+    public static File findFileCertForBJCA(File directory) {
+        File[] matches = directory.listFiles((dir, name) -> name.endsWith(".crt.pem"));
+
+        if (null == matches) {
+            throw new RuntimeException(format("Matches returned null does %s directory exist?", directory.getAbsoluteFile().getName()));
+        }
+
+        if (matches.length != 1) {
+            throw new RuntimeException(format("Expected in %s only 1 crt file but found %d", directory.getAbsoluteFile().getName(), matches.length));
+        }
+
+        return matches[0];
+    }
 }

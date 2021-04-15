@@ -38,6 +38,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.openssl.PEMKeyPair;
 import org.bouncycastle.openssl.PEMParser;
 import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
 import org.bouncycastle.util.encoders.Hex;
@@ -225,7 +226,14 @@ public class SampleStore {
 
         final PrivateKeyInfo pemPair;
         try (PEMParser pemParser = new PEMParser(pemReader)) {
-            pemPair = (PrivateKeyInfo) pemParser.readObject();
+            Object o = pemParser.readObject();
+            if (o instanceof PrivateKeyInfo){
+                pemPair = (PrivateKeyInfo) o ;
+            }
+            else {
+                PEMKeyPair pemKeyPair = (PEMKeyPair)o;
+                pemPair = pemKeyPair.getPrivateKeyInfo();
+            }
         }
 
         PrivateKey privateKey = new JcaPEMKeyConverter().setProvider(BouncyCastleProvider.PROVIDER_NAME).getPrivateKey(pemPair);

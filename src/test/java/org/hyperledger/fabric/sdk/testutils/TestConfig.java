@@ -35,6 +35,7 @@ import java.util.stream.Stream;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.hyperledger.fabric.sdk.helper.Utils;
 import org.hyperledger.fabric.sdkintegration.SampleOrg;
 
@@ -54,6 +55,18 @@ import org.hyperledger.fabric.sdkintegration.SampleOrg;
 
 public class TestConfig {
     private static final Log logger = LogFactory.getLog(TestConfig.class);
+
+    /**
+     * Crypto configuration settings -- settings should not be changed.
+     **/
+    public static final String DEFAULT_CRYPTO_SUITE_FACTORY = "org.hyperledger.fabric.sdk.crypto.default_crypto_suite_factory";
+    public static final String SECURITY_LEVEL = "org.hyperledger.fabric.sdk.security_level";
+    public static final String SECURITY_PROVIDER_CLASS_NAME = "org.hyperledger.fabric.sdk.security_provider_class_name";
+    public static final String SECURITY_CURVE_MAPPING = "org.hyperledger.fabric.sdk.security_curve_mapping";
+    public static final String HASH_ALGORITHM = "org.hyperledger.fabric.sdk.hash_algorithm";
+    public static final String ASYMMETRIC_KEY_TYPE = "org.hyperledger.fabric.sdk.crypto.asymmetric_key_type";
+    public static final String CERTIFICATE_FORMAT = "org.hyperledger.fabric.sdk.crypto.certificate_format";
+    public static final String SIGNATURE_ALGORITHM = "org.hyperledger.fabric.sdk.crypto.default_signature_algorithm";
 
     private static final String DEFAULT_CONFIG = "src/test/java/org/hyperledger/fabric/sdk/testutils.properties";
     private static final String ORG_HYPERLEDGER_FABRIC_SDK_CONFIGURATION = "org.hyperledger.fabric.sdktest.configuration";
@@ -94,6 +107,8 @@ public class TestConfig {
             = System.getenv("ORG_HYPERLEDGER_FABRIC_SDKTEST_VERSION") == null ? "2.1.0" : System.getenv("ORG_HYPERLEDGER_FABRIC_SDKTEST_VERSION");
 
     int[] fabricVersion = new int[3];
+
+    boolean bjca = true;
 
     private TestConfig() {
 
@@ -139,21 +154,34 @@ public class TestConfig {
 
             //////
             defaultProperty(INTEGRATIONTESTS_ORG + "peerOrg1.mspid", "Org1MSP");
-            defaultProperty(INTEGRATIONTESTS_ORG + "peerOrg1.domname", "org1.example.com");
+            defaultProperty(INTEGRATIONTESTS_ORG + "peerOrg1.domname", "org1.bjca.com");
             defaultProperty(INTEGRATIONTESTS_ORG + "peerOrg1.ca_location", "http://" + LOCALHOST + ":7054");
             defaultProperty(INTEGRATIONTESTS_ORG + "peerOrg1.caName", "ca0");
-            defaultProperty(INTEGRATIONTESTS_ORG + "peerOrg1.peer_locations", "peer0.org1.example.com@grpc://" + LOCALHOST + ":7051, peer1.org1.example.com@grpc://" + LOCALHOST + ":7056");
-            defaultProperty(INTEGRATIONTESTS_ORG + "peerOrg1.orderer_locations", "orderer.example.com@grpc://" + LOCALHOST + ":7050");
+            defaultProperty(INTEGRATIONTESTS_ORG + "peerOrg1.peer_locations", "peer0.org1.bjca.com@grpc://" + LOCALHOST + ":7051, peer1.org1.bjca.com@grpc://" + LOCALHOST + ":8051");
+//            defaultProperty(INTEGRATIONTESTS_ORG + "peerOrg1.orderer_locations", "orderer.example.com@grpc://" + LOCALHOST + ":7050");
+            defaultProperty(INTEGRATIONTESTS_ORG + "peerOrg1.orderer_locations",
+                    "orderer1.org0.bjca.com@grpc://" + LOCALHOST + ":7050, " +
+                    "orderer2.org0.bjca.com@grpc://" + LOCALHOST + ":8050, " +
+                    "orderer3.org0.bjca.com@grpc://" + LOCALHOST + ":9050");
             defaultProperty(INTEGRATIONTESTS_ORG + "peerOrg2.mspid", "Org2MSP");
-            defaultProperty(INTEGRATIONTESTS_ORG + "peerOrg2.domname", "org2.example.com");
+            defaultProperty(INTEGRATIONTESTS_ORG + "peerOrg2.domname", "org2.bjca.com");
             defaultProperty(INTEGRATIONTESTS_ORG + "peerOrg2.ca_location", "http://" + LOCALHOST + ":8054");
-            defaultProperty(INTEGRATIONTESTS_ORG + "peerOrg2.peer_locations", "peer0.org2.example.com@grpc://" + LOCALHOST + ":8051,peer1.org2.example.com@grpc://" + LOCALHOST + ":8056");
-            defaultProperty(INTEGRATIONTESTS_ORG + "peerOrg2.orderer_locations", "orderer.example.com@grpc://" + LOCALHOST + ":7050");
-
-            defaultProperty(INTEGRATIONTESTSTLS, null);
+            defaultProperty(INTEGRATIONTESTS_ORG + "peerOrg2.peer_locations", "peer0.org2.bjca.com@grpc://" + LOCALHOST + ":9051,peer1.org2.bjca.com@grpc://" + LOCALHOST + ":10051");
+            defaultProperty(INTEGRATIONTESTS_ORG + "peerOrg2.orderer_locations",
+                    "orderer1.org0.bjca.com@grpc://" + LOCALHOST + ":7050, " +
+                    "orderer2.org0.bjca.com@grpc://" + LOCALHOST + ":8050, " +
+                    "orderer3.org0.bjca.com@grpc://" + LOCALHOST + ":9050");
+            defaultProperty(INTEGRATIONTESTSTLS, "true");
             runningTLS = null != sdkProperties.getProperty(INTEGRATIONTESTSTLS, null);
-            runningFabricCATLS = runningTLS;
+            runningFabricCATLS = false;
             runningFabricTLS = runningTLS;
+
+            // gm
+
+            defaultProperty(HASH_ALGORITHM, "SM3");
+            defaultProperty(SIGNATURE_ALGORITHM, "SM3WITHSM2");
+            defaultProperty(SECURITY_PROVIDER_CLASS_NAME, BouncyCastleProvider.class.getName());
+
 
             for (Map.Entry<Object, Object> x : sdkProperties.entrySet()) {
                 final String key = x.getKey() + "";
@@ -197,20 +225,20 @@ public class TestConfig {
 
                 sampleOrg.setCAName(sdkProperties.getProperty((INTEGRATIONTESTS_ORG + org.getKey() + ".caName")));
 
-                if (runningFabricCATLS) {
-                    String cert = "src/test/fixture/sdkintegration/e2e-2Orgs/FAB_CONFIG_GEN_VERS/crypto-config/peerOrganizations/DNAME/ca/ca.DNAME-cert.pem"
-                            .replaceAll("DNAME", domainName).replaceAll("FAB_CONFIG_GEN_VERS", FAB_CONFIG_GEN_VERS);
-                    File cf = new File(cert);
-                    if (!cf.exists() || !cf.isFile()) {
-                        throw new RuntimeException("TEST is missing cert file " + cf.getAbsolutePath());
-                    }
-                    Properties properties = new Properties();
-                    properties.setProperty("pemFile", cf.getAbsolutePath());
-
-                    properties.setProperty("allowAllHostNames", "true"); //testing environment only NOT FOR PRODUCTION!
-
-                    sampleOrg.setCAProperties(properties);
-                }
+//                if (runningFabricCATLS) {
+//                    String cert = "src/test/fixture/sdkintegration/e2e-2Orgs/FAB_CONFIG_GEN_VERS/crypto-config/peerOrganizations/DNAME/ca/ca.DNAME-cert.pem"
+//                            .replaceAll("DNAME", domainName).replaceAll("FAB_CONFIG_GEN_VERS", FAB_CONFIG_GEN_VERS);
+//                    File cf = new File(cert);
+//                    if (!cf.exists() || !cf.isFile()) {
+//                        throw new RuntimeException("TEST is missing cert file " + cf.getAbsolutePath());
+//                    }
+//                    Properties properties = new Properties();
+//                    properties.setProperty("pemFile", cf.getAbsolutePath());
+//
+//                    properties.setProperty("allowAllHostNames", "true"); //testing environment only NOT FOR PRODUCTION!
+//
+//                    sampleOrg.setCAProperties(properties);
+//                }
             }
         }
     }
@@ -379,7 +407,62 @@ public class TestConfig {
 
     }
 
+    public String getOrgFromAddress(final String name) {
+        String[] pieces = name.split("\\.");
+        if (pieces.length < 2){
+            return null;
+        }
+
+        return pieces[1];
+    }
+
+    public String getConfigFolderName(){
+        return "crypto-config-20210329";
+    }
+
+    public Properties getEndPointPropertiesForBJCA(final String type, final String name) {
+        Properties ret = new Properties();
+
+        final String orgName = getOrgFromAddress(name);
+
+        String configFolder = getConfigFolderName();
+
+        File cert = Paths.get(getTestChannelPath(), configFolder, "admin." + orgName, "tls/ica.cert.pem").toFile();
+        File clientCert;
+        File clientKey;
+        clientCert = Paths.get(getTestChannelPath(), configFolder, "admin." + orgName, "tls/client.crt").toFile();
+
+        clientKey = Paths.get(getTestChannelPath(), configFolder, "admin." + orgName, "tls/client.key").toFile();
+        if (!cert.exists()) {
+            throw new RuntimeException(String.format("Missing cert file for: %s. Could not find at location: %s", name,
+                    cert.getAbsolutePath()));
+        }
+        if (!clientCert.exists()) {
+            throw new RuntimeException(String.format("Missing  client cert file for: %s. Could not find at location: %s", name,
+                    clientCert.getAbsolutePath()));
+        }
+
+        if (!clientKey.exists()) {
+            throw new RuntimeException(String.format("Missing  client key file for: %s. Could not find at location: %s", name,
+                    clientKey.getAbsolutePath()));
+        }
+
+        ret.setProperty("clientCertFile", clientCert.getAbsolutePath());
+        ret.setProperty("clientKeyFile", clientKey.getAbsolutePath());
+
+        ret.setProperty("pemFile", cert.getAbsolutePath());
+
+        ret.setProperty("hostnameOverride", name);
+        ret.setProperty("sslProvider", "JDK");
+        ret.setProperty("negotiationType", "TLS");
+
+        return ret;
+    }
+
     public Properties getEndPointProperties(final String type, final String name) {
+        if (bjca){
+            return getEndPointPropertiesForBJCA(type, name);
+        }
         Properties ret = new Properties();
 
         final String domainName = getDomainName(name);
@@ -419,7 +502,7 @@ public class TestConfig {
         ret.setProperty("pemFile", cert.getAbsolutePath());
 
         ret.setProperty("hostnameOverride", name);
-        ret.setProperty("sslProvider", "openSSL");
+        ret.setProperty("sslProvider", "JDK");
         ret.setProperty("negotiationType", "TLS");
 
         return ret;
@@ -427,7 +510,7 @@ public class TestConfig {
 
     public String getTestChannelPath() {
 
-        return "src/test/fixture/sdkintegration/e2e-2Orgs/" + FAB_CONFIG_GEN_VERS;
+        return "/home/deemo/user/git/fabrc-sdk-java-2.2.1/gm-docker-with-bjca";
 
     }
 
@@ -508,10 +591,14 @@ public class TestConfig {
 
     public static void main(String[] ars) {
 
-        final TestConfig config = getConfig();
-        final boolean runningAgainstFabric10 = config.isRunningAgainstFabric10();
+//        final TestConfig config = getConfig();
+//        final boolean runningAgainstFabric10 = config.isRunningAgainstFabric10();
+//
+//        System.out.println(runningAgainstFabric10);
 
-        System.out.println(runningAgainstFabric10);
+        String s = "orderer1.org0.bjca.com";
+        String[] pieces = s.split("\\.");
+        System.out.println(pieces[1]);
     }
 
 }

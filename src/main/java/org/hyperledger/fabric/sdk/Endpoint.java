@@ -24,13 +24,10 @@ import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.PrivateKey;
+import java.security.Provider;
+import java.security.Security;
 import java.security.cert.X509Certificate;
-import java.util.AbstractMap;
-import java.util.Base64;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -41,6 +38,8 @@ import io.grpc.ManagedChannelBuilder;
 import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
+import io.netty.channel.ChannelInitializer;
+import io.netty.handler.codec.http2.Http2SecurityUtil;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
@@ -54,9 +53,14 @@ import org.bouncycastle.asn1.x500.style.IETFUtils;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
 import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.crypto.digests.SHA256Digest;
+import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.hyperledger.fabric.sdk.exception.CryptoException;
 import org.hyperledger.fabric.sdk.helper.Config;
-import org.hyperledger.fabric.sdk.security.CryptoPrimitives;
+import org.hyperledger.fabric.sdk.security.CryptoSuite;
+import org.whu.gmssl.jsse.provider.GMJsseProvider;
+import org.whu.gmssl.sun.security.ssl.GMJsse;
+import sun.security.provider.Sun;
+import sun.security.ssl.SunJSSE;
 
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -75,9 +79,19 @@ class Endpoint {
     private byte[] tlsClientCertificatePEMBytes;
     private NettyChannelBuilder channelBuilder = null;
 
+    // modify by ringo
+//    private Provider gmJSSE;
+
     private static final Map<String, String> CN_CACHE = Collections.synchronizedMap(new HashMap<>());
 
     Endpoint(String url, Properties properties) {
+        // modify by ringo
+//        gmJSSE = new GMJSSE();
+////        gmJSSE.put("Alg.Alias.SSLContext.TLS", "TLSv1.1");
+//        gmJSSE.put("Alg.Alias.SSLContext.TLS", "GMSSLv1.1");
+//        GMConf.debug = true;
+//        GMConf.adaptive = false;
+
         logger.trace(format("Creating endpoint for url %s", url));
         this.url = url;
         String cn = null;
@@ -100,9 +114,10 @@ class Endpoint {
             }
 
             if ("grpcs".equals(protocol)) {
-                CryptoPrimitives cp;
+                // modify by ringo
+                CryptoSuite cs;
                 try {
-                    cp = new CryptoPrimitives();
+                    cs = CryptoSuite.Factory.getCryptoSuite();
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
@@ -152,7 +167,7 @@ class Endpoint {
                             cn = CN_CACHE.get(cnKey);
                             if (cn == null) {
                                 X500Name x500name = new JcaX509CertificateHolder(
-                                        (X509Certificate) cp.bytesToCertificate(pemBytes)).getSubject();
+                                        (X509Certificate) cs.bytesToCertificate(pemBytes)).getSubject();
                                 RDN rdn = x500name.getRDNs(BCStyle.CN)[0];
                                 cn = IETFUtils.valueToString(rdn.getFirst().getValue());
                                 CN_CACHE.put(cnKey, cn);
@@ -199,12 +214,12 @@ class Endpoint {
                         logger.trace("client TLS private key bytes size:" + ckb.length);
                         whatBytes = ckb;
                         logger.trace("client TLS key bytes:" + Hex.encodeHexString(ckb));
-                        clientKey = cp.bytesToPrivateKey(ckb);
+                        clientKey = cs.bytesToPrivateKey(ckb);
                         logger.trace("converted TLS key.");
                         what = "certificate";
                         whatBytes = ccb;
                         logger.trace("client TLS certificate bytes:" + Hex.encodeHexString(ccb));
-                        clientCert = new X509Certificate[] {(X509Certificate) cp.bytesToCertificate(ccb)};
+                        clientCert = new X509Certificate[] {(X509Certificate) cs.bytesToCertificate(ccb)};
                         logger.trace("converted client TLS certificate.");
                         tlsClientCertificatePEMBytes = ccb; // Save this away it's the exact pem we used.
                     } catch (CryptoException e) {
@@ -291,13 +306,33 @@ class Endpoint {
     }
 
     SslContextBuilder getSslContextBuilder(X509Certificate[] clientCert, PrivateKey clientKey, SslProvider sslprovider) {
-        SslContextBuilder clientContextBuilder = GrpcSslContexts.configure(SslContextBuilder.forClient(), sslprovider);
+//        SslContextBuilder clientContextBuilder = GrpcSslContexts.configure(SslContextBuilder.forClient(), gmJSSE);
+//        Security.removeProvider("GMJSSE");
+        SslContextBuilder clientContextBuilder = GrpcSslContexts.configure(SslContextBuilder.forClient(), Security.getProvider("SunJSSE"));
+//        Security.insertProviderAt(gmJSSE, 2);
+
         if (clientKey != null && clientCert != null) {
             clientContextBuilder = clientContextBuilder.keyManager(clientKey, clientCert);
         } else {
             logger.debug(format("Endpoint %s with no ssl context", url));
         }
+        // 国密化 modify by ringo
+        clientContextBuilder = configGMContextBuilder(clientContextBuilder);
+        //clientContextBuilder.sslContextProvider(new GMJSSE());
         return clientContextBuilder;
+    }
+
+    /**
+     * 国密化
+     * @param clientContextBuilder ctx
+     * @return builder
+     */
+    private SslContextBuilder configGMContextBuilder(SslContextBuilder clientContextBuilder){
+        String[] ciphers_arr = {"ECC_SM4_SM3"};
+        List<String> ciphers = new ArrayList<>(Arrays.asList(ciphers_arr));
+
+        return clientContextBuilder.ciphers(ciphers)
+                .sslContextProvider(new GMJsseProvider());
     }
 
     byte[] getClientTLSCertificateDigest() {
@@ -441,10 +476,10 @@ class Endpoint {
             String what = "private key";
             byte[] whatBytes = new byte[0];
             try {
-
-                CryptoPrimitives cp;
+                // modify by ringo
+                CryptoSuite cs;
                 try {
-                    cp = new CryptoPrimitives();
+                    cs = CryptoSuite.Factory.getCryptoSuite();
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
@@ -452,12 +487,12 @@ class Endpoint {
                 logger.trace("client TLS private key bytes size:" + ckb.length);
                 whatBytes = ckb;
                 logger.trace("client TLS key bytes:" + Hex.encodeHexString(ckb));
-                PrivateKey clientKey = cp.bytesToPrivateKey(ckb);
+                PrivateKey clientKey = cs.bytesToPrivateKey(ckb);
                 logger.trace("converted TLS key.");
                 what = "certificate";
                 whatBytes = ccb;
                 logger.trace("client TLS certificate bytes:" + Hex.encodeHexString(ccb));
-                X509Certificate[] clientCert = new X509Certificate[] {(X509Certificate) cp.bytesToCertificate(ccb)};
+                X509Certificate[] clientCert = new X509Certificate[] {(X509Certificate) cs.bytesToCertificate(ccb)};
                 logger.trace("converted client TLS certificate.");
                 tlsClientCertificatePEMBytes = ccb; // Save this away it's the exact pem we used.
 

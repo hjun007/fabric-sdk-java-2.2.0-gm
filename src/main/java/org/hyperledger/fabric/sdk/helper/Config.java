@@ -159,11 +159,13 @@ public class Config {
             defaultProperty(SECURITY_LEVEL, "256");
             defaultProperty(SECURITY_PROVIDER_CLASS_NAME, BouncyCastleProvider.class.getName());
             defaultProperty(SECURITY_CURVE_MAPPING, "256=secp256r1:384=secp384r1");
-            defaultProperty(HASH_ALGORITHM, "SHA2");
+            // modify by ringo
+            defaultProperty(HASH_ALGORITHM, "SM3");
             defaultProperty(ASYMMETRIC_KEY_TYPE, "EC");
 
             defaultProperty(CERTIFICATE_FORMAT, "X.509");
-            defaultProperty(SIGNATURE_ALGORITHM, "SHA256withECDSA");
+            // modify by ringo
+            defaultProperty(SIGNATURE_ALGORITHM, "SM3WITHSM2");
 
             /**
              * Connection defaults

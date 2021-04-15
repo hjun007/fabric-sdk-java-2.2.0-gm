@@ -10,6 +10,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.Security;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -29,6 +30,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
 
 import com.google.protobuf.InvalidProtocolBufferException;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.hyperledger.fabric.sdk.BlockEvent.TransactionEvent;
 import org.hyperledger.fabric.sdk.ChaincodeCollectionConfiguration;
 import org.hyperledger.fabric.sdk.ChaincodeResponse;
@@ -75,6 +77,9 @@ import org.hyperledger.fabric_ca.sdk.HFCAInfo;
 import org.hyperledger.fabric_ca.sdk.RegistrationRequest;
 import org.junit.Before;
 import org.junit.Test;
+import org.whu.gmssl.jsse.provider.GMJsseProvider;
+
+import javax.crypto.KeyGenerator;
 
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -96,7 +101,7 @@ public class End2endLifecycleIT {
 
     static final String TEST_ADMIN_NAME = "admin";
     private static final TestConfig testConfig = TestConfig.getConfig();
-    private static final String TEST_FIXTURES_PATH = "src/test/fixture";
+    private static final String TEST_FIXTURES_PATH = testConfig.getTestChannelPath();
     private static final String CHANNEL_NAME = "v2channel";
     private static final String BAR_CHANNEL_NAME = "bar";
     private static final int DEPLOYWAITTIME = testConfig.getDeployWaitTime();
@@ -114,6 +119,10 @@ public class End2endLifecycleIT {
         TX_EXPECTED = new HashMap<>();
         TX_EXPECTED.put("readset1", "Missing readset for channel bar block 1");
         TX_EXPECTED.put("writeset1", "Missing writeset for channel bar block 1");
+
+
+        Security.insertProviderAt(new GMJsseProvider(), 1);
+        Security.insertProviderAt(new BouncyCastleProvider(), 2);
     }
 
     private final TestConfigHelper configHelper = new TestConfigHelper();
@@ -167,6 +176,11 @@ public class End2endLifecycleIT {
         //Persistence is not part of SDK. Sample file store is for demonstration purposes only!
         //   MUST be replaced with more robust application implementation  (Database, LDAP)
 
+//        String versionStr = System.getProperty("java.version", "");
+//        System.out.println(versionStr);
+//        Class.forName("sun.security.ssl.ALPNExtension", true, null);
+//        KeyGenerator keyGenerator = KeyGenerator.getInstance("GBTlsPrf");
+//        System.exit(1);
 //        if (sampleStoreFile.exists()) { //For testing start fresh
 //            sampleStoreFile.delete();
 //        }
@@ -178,6 +192,8 @@ public class End2endLifecycleIT {
     }
 
     public void runFabricTest() throws Exception {
+
+        // -Xbootclasspath/p:/home/qingxian/user/jars/alpn-boot.jar:/home/qingxian/user/jars/npn-boot-8.1.2.v20120308.jar
 
         ////////////////////////////
         // Setup client
@@ -238,7 +254,7 @@ public class End2endLifecycleIT {
 
         //Org1 also creates the endorsement policy for the chaincode. // also known as validationParameter !
         LifecycleChaincodeEndorsementPolicy chaincodeEndorsementPolicy = LifecycleChaincodeEndorsementPolicy.fromSignaturePolicyYamlFile(Paths.get(TEST_FIXTURES_PATH +
-                "/sdkintegration/chaincodeendorsementpolicy.yaml"));
+                "/chaincodeendorsementpolicy.yaml"));
 
         final String goChaincodeName = "lc_example_cc_go";
         runChannel(org1Client, org1Channel, org1, org1MyPeers, org1OtherPeers,
@@ -271,63 +287,63 @@ public class End2endLifecycleIT {
                     put("sequence", 2L);  // this is an update sequence should be 2
                     put("queryBvalue", "320");  // init is run which set back to 300.  new chaincoode doubles the move of 10 to 20 so expect 320
                 }});
-
-        //////////////
-        ////  DO Java
-        out("---  Running Java Chaincode.---  \n\n");
-        LifecycleChaincodePackage lifecycleChaincodePackageJava = createLifecycleChaincodePackage(
-                "JavaLABEL", // some label
-                Type.JAVA, IntegrationSuite.getJavaChaincodePath("sample1").toString(),
-                "", // no path in Java.
-                null); // no metaInf data
-
-        runChannel(org1Client, org1Channel, org1, org1MyPeers, org1OtherPeers,
-                org2Client, org2Channel, org2, org2MyPeers, org2OtherPeers,
-                lifecycleChaincodePackageJava, "example_cc_java", // chaincode name
-                CHAIN_CODE_VERSION,
-                null, // use default endorsement policy
-                null, //ChaincodeCollectionConfiguration
-                true,  // initRequired
-                expectedMap);
-
-        //////////////
-        ////  DO Node
-        out("---   Running Node Chaincode.   ---");
-        LifecycleChaincodePackage lifecycleChaincodePackageNode = createLifecycleChaincodePackage(
-                "ImNodeSeeMeRun", // some label
-                Type.NODE,
-                IntegrationSuite.getNodeChaincodePath("sample1").toString(),
-                "", // no path in node.
-                null); // no metaInf data
-
-        runChannel(org1Client, org1Channel, org1, org1MyPeers, org1OtherPeers,
-                org2Client, org2Channel, org2, org2MyPeers, org2OtherPeers,
-                lifecycleChaincodePackageNode, "example_cc_node", // chaincode name
-                CHAIN_CODE_VERSION,
-                null, // use default endorsement policy
-                null, //ChaincodeCollectionConfiguration
-                true,  // initRequired
-                expectedMap);
-
-        //////////////
-        ////  DO Go without any standard init required.
-        out("---   Running GO Chaincode with no init.   ---");
-        LifecycleChaincodePackage lifecycleChaincodePackageNoInit = createLifecycleChaincodePackage(
-                "lc_example_cc_go_1", // some label
-                Type.GO_LANG,
-                IntegrationSuite.getGoChaincodePath("sample1NoInit").toString(),
-                CHAIN_CODE_PATH,
-                null);
-
-        runChannel(org1Client, org1Channel, org1, org1MyPeers, org1OtherPeers,
-                org2Client, org2Channel, org2, org2MyPeers, org2OtherPeers,
-                lifecycleChaincodePackageNoInit,
-                "lc_example_cc_goNOIT", // chaincode name
-                CHAIN_CODE_VERSION,
-                null, // use default endorsement policy
-                null, // ChaincodeCollectionConfiguration
-                false,  // initRequired is now false
-                expectedMap);
+//
+//        //////////////
+//        ////  DO Java
+//        out("---  Running Java Chaincode.---  \n\n");
+//        LifecycleChaincodePackage lifecycleChaincodePackageJava = createLifecycleChaincodePackage(
+//                "JavaLABEL", // some label
+//                Type.JAVA, IntegrationSuite.getJavaChaincodePath("sample1").toString(),
+//                "", // no path in Java.
+//                null); // no metaInf data
+//
+//        runChannel(org1Client, org1Channel, org1, org1MyPeers, org1OtherPeers,
+//                org2Client, org2Channel, org2, org2MyPeers, org2OtherPeers,
+//                lifecycleChaincodePackageJava, "example_cc_java", // chaincode name
+//                CHAIN_CODE_VERSION,
+//                null, // use default endorsement policy
+//                null, //ChaincodeCollectionConfiguration
+//                true,  // initRequired
+//                expectedMap);
+//
+//        //////////////
+//        ////  DO Node
+//        out("---   Running Node Chaincode.   ---");
+//        LifecycleChaincodePackage lifecycleChaincodePackageNode = createLifecycleChaincodePackage(
+//                "ImNodeSeeMeRun", // some label
+//                Type.NODE,
+//                IntegrationSuite.getNodeChaincodePath("sample1").toString(),
+//                "", // no path in node.
+//                null); // no metaInf data
+//
+//        runChannel(org1Client, org1Channel, org1, org1MyPeers, org1OtherPeers,
+//                org2Client, org2Channel, org2, org2MyPeers, org2OtherPeers,
+//                lifecycleChaincodePackageNode, "example_cc_node", // chaincode name
+//                CHAIN_CODE_VERSION,
+//                null, // use default endorsement policy
+//                null, //ChaincodeCollectionConfiguration
+//                true,  // initRequired
+//                expectedMap);
+//
+//        //////////////
+//        ////  DO Go without any standard init required.
+//        out("---   Running GO Chaincode with no init.   ---");
+//        LifecycleChaincodePackage lifecycleChaincodePackageNoInit = createLifecycleChaincodePackage(
+//                "lc_example_cc_go_1", // some label
+//                Type.GO_LANG,
+//                IntegrationSuite.getGoChaincodePath("sample1NoInit").toString(),
+//                CHAIN_CODE_PATH,
+//                null);
+//
+//        runChannel(org1Client, org1Channel, org1, org1MyPeers, org1OtherPeers,
+//                org2Client, org2Channel, org2, org2MyPeers, org2OtherPeers,
+//                lifecycleChaincodePackageNoInit,
+//                "lc_example_cc_goNOIT", // chaincode name
+//                CHAIN_CODE_VERSION,
+//                null, // use default endorsement policy
+//                null, // ChaincodeCollectionConfiguration
+//                false,  // initRequired is now false
+//                expectedMap);
 
         assertFalse(org1Channel.isShutdown());
         org1Channel.shutdown(true); // Force foo channel to shutdown clean up resources.
@@ -889,67 +905,71 @@ public class End2endLifecycleIT {
         out("***** Enrolling Users *****");
         for (SampleOrg sampleOrg : testSampleOrgs) {
 
-            HFCAClient ca = sampleOrg.getCAClient();
+//            HFCAClient ca = sampleOrg.getCAClient();
+//
+//            final String orgName = sampleOrg.getName();
+//            final String mspid = sampleOrg.getMSPID();
+//            ca.setCryptoSuite(CryptoSuite.Factory.getCryptoSuite());
 
-            final String orgName = sampleOrg.getName();
-            final String mspid = sampleOrg.getMSPID();
-            ca.setCryptoSuite(CryptoSuite.Factory.getCryptoSuite());
+//            if (testConfig.isRunningFabricTLS()) {
+//                //This shows how to get a client TLS certificate from Fabric CA
+//                // we will use one client TLS certificate for orderer peers etc.
+//                final EnrollmentRequest enrollmentRequestTLS = new EnrollmentRequest();
+//                enrollmentRequestTLS.addHost("localhost");
+//                enrollmentRequestTLS.setProfile("tls");
+//                final Enrollment enroll = ca.enroll("admin", "adminpw", enrollmentRequestTLS);
+//                final String tlsCertPEM = enroll.getCert();
+//                final String tlsKeyPEM = getPEMStringFromPrivateKey(enroll.getKey());
+//
+//                final Properties tlsProperties = new Properties();
+//
+//                tlsProperties.put("clientKeyBytes", tlsKeyPEM.getBytes(UTF_8));
+//                tlsProperties.put("clientCertBytes", tlsCertPEM.getBytes(UTF_8));
+//                clientTLSProperties.put(sampleOrg.getName(), tlsProperties);
+//                //Save in samplestore for follow on tests.
+//                sampleStore.storeClientPEMTLCertificate(sampleOrg, tlsCertPEM);
+//                sampleStore.storeClientPEMTLSKey(sampleOrg, tlsKeyPEM);
+//            }
 
-            if (testConfig.isRunningFabricTLS()) {
-                //This shows how to get a client TLS certificate from Fabric CA
-                // we will use one client TLS certificate for orderer peers etc.
-                final EnrollmentRequest enrollmentRequestTLS = new EnrollmentRequest();
-                enrollmentRequestTLS.addHost("localhost");
-                enrollmentRequestTLS.setProfile("tls");
-                final Enrollment enroll = ca.enroll("admin", "adminpw", enrollmentRequestTLS);
-                final String tlsCertPEM = enroll.getCert();
-                final String tlsKeyPEM = getPEMStringFromPrivateKey(enroll.getKey());
-
-                final Properties tlsProperties = new Properties();
-
-                tlsProperties.put("clientKeyBytes", tlsKeyPEM.getBytes(UTF_8));
-                tlsProperties.put("clientCertBytes", tlsCertPEM.getBytes(UTF_8));
-                clientTLSProperties.put(sampleOrg.getName(), tlsProperties);
-                //Save in samplestore for follow on tests.
-                sampleStore.storeClientPEMTLCertificate(sampleOrg, tlsCertPEM);
-                sampleStore.storeClientPEMTLSKey(sampleOrg, tlsKeyPEM);
-            }
-
-            HFCAInfo info = ca.info(); //just check if we connect at all.
-            assertNotNull(info);
-            String infoName = info.getCAName();
-            if (infoName != null && !infoName.isEmpty()) {
-                assertEquals(ca.getCAName(), infoName);
-            }
-
-            SampleUser admin = sampleStore.getMember(TEST_ADMIN_NAME, orgName);
-            if (!admin.isEnrolled()) {  //Preregistered admin only needs to be enrolled with Fabric caClient.
-                admin.setEnrollment(ca.enroll(admin.getName(), "adminpw"));
-                admin.setMspId(mspid);
-            }
-
-            SampleUser user = sampleStore.getMember(testUser1, sampleOrg.getName());
-            if (!user.isRegistered()) {  // users need to be registered AND enrolled
-                RegistrationRequest rr = new RegistrationRequest(user.getName(), "org1.department1");
-                user.setEnrollmentSecret(ca.register(rr, admin));
-            }
-            if (!user.isEnrolled()) {
-                user.setEnrollment(ca.enroll(user.getName(), user.getEnrollmentSecret()));
-                user.setMspId(mspid);
-            }
+//            HFCAInfo info = ca.info(); //just check if we connect at all.
+//            assertNotNull(info);
+//            String infoName = info.getCAName();
+//            if (infoName != null && !infoName.isEmpty()) {
+//                assertEquals(ca.getCAName(), infoName);
+//            }
+//
+//            SampleUser admin = sampleStore.getMember(TEST_ADMIN_NAME, orgName);
+//            if (!admin.isEnrolled()) {  //Preregistered admin only needs to be enrolled with Fabric caClient.
+//                admin.setEnrollment(ca.enroll(admin.getName(), "adminpw"));
+//                admin.setMspId(mspid);
+//            }
+//
+//            SampleUser user = sampleStore.getMember(testUser1, sampleOrg.getName());
+//            if (!user.isRegistered()) {  // users need to be registered AND enrolled
+//                RegistrationRequest rr = new RegistrationRequest(user.getName(), "org1.department1");
+//                user.setEnrollmentSecret(ca.register(rr, admin));
+//            }
+//            if (!user.isEnrolled()) {
+//                user.setEnrollment(ca.enroll(user.getName(), user.getEnrollmentSecret()));
+//                user.setMspId(mspid);
+//            }
 
             final String sampleOrgName = sampleOrg.getName();
             final String sampleOrgDomainName = sampleOrg.getDomainName();
 
+            int dot = sampleOrgDomainName.indexOf(".");
+            String orgName = sampleOrgDomainName.substring(0, dot);
+
+
             SampleUser peerOrgAdmin = sampleStore.getMember(sampleOrgName + "Admin", sampleOrgName, sampleOrg.getMSPID(),
-                    Util.findFileSk(Paths.get(testConfig.getTestChannelPath(), "crypto-config/peerOrganizations/",
-                            sampleOrgDomainName, format("/users/Admin@%s/msp/keystore", sampleOrgDomainName)).toFile()),
-                    Paths.get(testConfig.getTestChannelPath(), "crypto-config/peerOrganizations/", sampleOrgDomainName,
-                            format("/users/Admin@%s/msp/signcerts/Admin@%s-cert.pem", sampleOrgDomainName, sampleOrgDomainName)).toFile());
+                    Util.findFileSkForBJCA(Paths.get(testConfig.getTestChannelPath(), testConfig.getConfigFolderName(),
+                            "admin." + orgName, "/msp/keystore").toFile()),
+                    Util.findFileCertForBJCA(Paths.get(testConfig.getTestChannelPath(), testConfig.getConfigFolderName(),
+                            "admin." + orgName, "/msp/signcerts").toFile()));
             sampleOrg.setPeerAdmin(peerOrgAdmin); //A special user that can create channels, join peers and install chaincode
 
-            sampleOrg.addUser(user);
-            sampleOrg.setAdmin(admin); // The admin of this org --
+//            sampleOrg.addUser(user);
+//            sampleOrg.setAdmin(admin); // The admin of this org --
         }
     }
 
@@ -984,7 +1004,7 @@ public class End2endLifecycleIT {
         Orderer anOrderer = orderers.iterator().next();
         orderers.remove(anOrderer);
 
-        String path = TEST_FIXTURES_PATH + "/sdkintegration/e2e-2Orgs/" + testConfig.getFabricConfigGenVers() + "/" + name + ".tx";
+        String path = TEST_FIXTURES_PATH + "/" + testConfig.getConfigFolderName() + "/" + name + ".tx";
         ChannelConfiguration channelConfiguration = new ChannelConfiguration(new File(path));
 
         Channel newChannel = createFabricChannel ? client.newChannel(name, anOrderer, channelConfiguration, client.getChannelConfigurationSignature(channelConfiguration, peerAdmin)) :

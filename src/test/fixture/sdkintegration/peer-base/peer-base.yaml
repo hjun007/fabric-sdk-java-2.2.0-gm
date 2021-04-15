@@ -21,7 +21,7 @@ services:
       # are not doing mutual TLS
       - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/msp/peer/msp
       - CORE_PEER_PROFILE_ENABLED=false
-      - CORE_PEER_TLS_ENABLED=${ORG_HYPERLEDGER_FABRIC_SDKTEST_INTEGRATIONTESTS_TLS}
+      - CORE_PEER_TLS_ENABLED=true
       - CORE_PEER_TLS_CLIENTAUTHREQUIRED=${ORG_HYPERLEDGER_FABRIC_SDKTEST_INTEGRATIONTESTS_CLIENT_AUTH_REQUIRED}
       - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/msp/peer/tls/server.crt
       - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/msp/peer/tls/server.key
