@@ -1,3 +1,14 @@
+# 如何使用
+参考[End2endLifecycleIT.java](./src/test/java/org/hyperledger/fabric/sdkintegration/End2endLifecycleIT.java)
+
+注意在代码最开始替换Provider：
+```
+static {
+  Security.insertProviderAt(new GMJsseProvider(), 1);
+  Security.insertProviderAt(new BouncyCastleProvider(), 2);
+}
+```
+
 # Hyperledger Fabric SDK for Java
 
 <div style="float: right">
